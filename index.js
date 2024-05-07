@@ -8,6 +8,7 @@ const PARAMS = {
   tapeThickness: 0.01,
   tapeTotalLength: 2000000,
   tapeSpeed: 25,
+  tapeColor: '#0139a6',
   guideOnePos: [250, 275],
   guideTwoPos: [265, 250],
   headPos: [300, 250],
@@ -49,7 +50,7 @@ const tapeRadius = (tapeLength) => {
 const tape = (g, length) => {
   return g
     .circle(0, 0, tapeRadius(length))
-    .fill('black');
+    .fill(PARAMS.tapeColor);
 };
 
 const tangentPoint = ([circleX, circleY], r, [pointX, pointY], factor) => {
@@ -126,5 +127,5 @@ app.ticker.add(time => {
   reelTwo.rotation += dx / (2 * Math.PI * tapeRadius(currentLength));
   tape(tapeGraphics1.clear(), totalLength - currentLength);
   tape(tapeGraphics2.clear(), currentLength);
-  runningTapeGraphics.clear().path(runningTape(totalLength - currentLength)).stroke({width: 2, color: 'black', join: 'round', cap: 'round' });
+  runningTapeGraphics.clear().path(runningTape(totalLength - currentLength)).stroke({width: 2, color: PARAMS.tapeColor, join: 'round', cap: 'round' });
 });
