@@ -1,22 +1,57 @@
-import { Application, Graphics, GraphicsPath } from './pixi.mjs';
+import { Application, Graphics, GraphicsPath, Text, Assets, Rectangle, Sprite } from './pixi.mjs';
 
 const PARAMS = {
   reelOnePos: [150, 150],
   reelTwoPos: [450, 150],
   reelInnerRadius: 35,
   reelOuterRadius: 100,
-  tapeThickness: 0.01,
-  tapeTotalLength: 2000000,
-  tapeSpeed: 25,
-  tapeColor: '#0139a6',
+  tapeThickness: 0.1,
+  tapeTotalLength: 200000,
+  tapeSpeedScale: 100,
+  tapeColor: '#0039a6',
   guideOnePos: [250, 275],
   guideTwoPos: [265, 250],
   headPos: [300, 250],
   guideThreePos: [335, 250],
   guideFourPos: [350, 275],
-  guideRadius: 5
+  guideRadius: 5,
+  stationLength: 1000
 };
 const totalLength = PARAMS.tapeTotalLength;
+let currentLength = 0;
+let tapeSpeed = 0;
+
+const STATIONS = [
+  {name: 'Euclid Av', pos: 0},
+  {name: 'Shepherd Av', pos: 5000},
+  {name: 'Van Siclen Av', pos: 10000},
+  {name: 'Liberty Av', pos: 15000},
+  {name: 'Broadway Junction', pos: 20000},
+  {name: 'Rockaway Av', pos: 25000}
+];
+let currentStation = 0;
+
+const within = (station) => {
+  return station?.pos <= currentLength && currentLength < station?.pos + PARAMS.stationLength;
+};
+const updateStation = () => {
+  // assumes that our dx is small enough that we won't skip stations, i guess?
+  const nextStation = STATIONS[currentStation+1];
+  const prevStation = STATIONS[currentStation-1];
+  if (nextStation?.pos <= currentLength) {
+    currentStation++;
+  } else if (currentLength < prevStation?.pos + PARAMS.stationLength) {
+    currentStation--;
+  }
+};
+const stationDetails = () => {
+  const station = STATIONS[currentStation];
+  if (within(station)) {
+    return {name: station.name, offset: currentLength - station.pos};
+  } else {
+    return null;
+  }
+};
 
 const reel = () => {
   const arcSize = Math.PI / 6;
@@ -40,11 +75,8 @@ const reel = () => {
     .fill('grey');
 };
 
-const innerRadius = 35;
-const tapeThickness = 0.01;
-
 const tapeRadius = (tapeLength) => {
-  return Math.sqrt(Math.pow(PARAMS.reelInnerRadius, 2) + tapeThickness * tapeLength / Math.PI);
+  return Math.sqrt(Math.pow(PARAMS.reelInnerRadius, 2) + PARAMS.tapeThickness * tapeLength / Math.PI);
 };
 
 const tape = (g, length) => {
@@ -117,15 +149,37 @@ const reelTwo = reel();
 reelTwo.position.set(...PARAMS.reelTwoPos);
 app.stage.addChild(reelTwo);
 
-let currentLength = 0;
+const stationText = new Text({text: ''});
+stationText.y = 200;
+app.stage.addChild(stationText);
 
 app.ticker.add(time => {
   const dt = time.deltaTime;
-  const dx = PARAMS.tapeSpeed * dt;
+  const dx = tapeSpeed * dt;
   currentLength += dx;
-  reelOne.rotation += dx / (2 * Math.PI * tapeRadius(totalLength - currentLength));
-  reelTwo.rotation += dx / (2 * Math.PI * tapeRadius(currentLength));
+  updateStation();
+  const stationIn = stationDetails();
+  if (stationIn) {
+    stationText.text = stationIn.name;
+    console.log(stationIn.name);
+    stationText.x = stationIn.offset - 200;
+  } else {
+    stationText.text = "";
+  }
+  reelOne.rotation -= dx / (2 * Math.PI * tapeRadius(totalLength - currentLength));
+  reelTwo.rotation -= dx / (2 * Math.PI * tapeRadius(currentLength));
   tape(tapeGraphics1.clear(), totalLength - currentLength);
   tape(tapeGraphics2.clear(), currentLength);
-  runningTapeGraphics.clear().path(runningTape(totalLength - currentLength)).stroke({width: 2, color: PARAMS.tapeColor, join: 'round', cap: 'round' });
+  runningTapeGraphics.clear().path(runningTape(totalLength - currentLength)).stroke({
+    width: 2,
+    color: PARAMS.tapeColor,
+    join: 'round',
+    cap: 'round'
+  });
+});
+
+const speedInput = document.querySelector("input");
+tapeSpeed = speedInput.value * PARAMS.tapeSpeedScale;
+speedInput.addEventListener("input", (event) => {
+  tapeSpeed = event.target.value * PARAMS.tapeSpeedScale;
 });
