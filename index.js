@@ -47,10 +47,15 @@ const updateStation = () => {
 const stationDetails = () => {
   const station = STATIONS[currentStation];
   if (within(station)) {
-    return {name: station.name, offset: currentLength - station.pos};
+    return {name: station.name, offset: (currentLength - station.pos) / PARAMS.stationLength};
   } else {
     return null;
   }
+};
+/// [0, 1] -> [0, 1], mapping the offset within the station to how intense
+/// the alpha of the station text should be.
+const stationOffsetEase = (offset) => {
+  return Math.pow(offset < 0.5 ? offset * 2 : (1 - offset) * 2, 0.5);
 };
 
 const reel = () => {
@@ -150,7 +155,7 @@ reelTwo.position.set(...PARAMS.reelTwoPos);
 app.stage.addChild(reelTwo);
 
 const stationText = new Text({text: ''});
-stationText.y = 200;
+stationText.y = 330;
 app.stage.addChild(stationText);
 
 app.ticker.add(time => {
@@ -162,7 +167,9 @@ app.ticker.add(time => {
   if (stationIn) {
     stationText.text = stationIn.name;
     console.log(stationIn.name);
-    stationText.x = stationIn.offset - 200;
+    stationText.x = 300; // TODO: don't hardcode this
+    stationText.anchor.x = 0.5;
+    stationText.alpha = stationOffsetEase(stationIn.offset);
   } else {
     stationText.text = "";
   }
