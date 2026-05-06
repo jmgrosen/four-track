@@ -17,6 +17,85 @@ const PARAMS = {
   guideRadius: 5,
   stationLength: 1000
 };
+
+/// LOGIC
+
+/// `Segment` represents a part of a train line. It should have no mutable
+/// state, instead only describing whatever relevant properties of the segment.
+class Segment {
+  get length() {
+    throw new Error("subclass must implement length");
+  }
+}
+
+class Station extends Segment {
+  constructor(name) {
+    super();
+    this.name = name;
+  }
+
+  get length() {
+    return PARAMS.stationLength;
+  }
+}
+
+class Straightaway extends Segment {
+  constructor(length) {
+    super();
+    this._length = length;
+  }
+
+  get length() {
+    return this._length;
+  }
+}
+
+class TrainLine {
+  /// `segments` is array of Segment.
+  constructor(segments) {
+    this.segments = segments;
+    /// morally immutable
+    this.totalLength = segments.reduce((acc, seg) => acc + seg.length, 0);
+  }
+
+  /// eventually we will want to get all segments within earshot, but for now
+  /// we suffice with just the one we're inside.
+  segmentWithin(position) {
+    if (position < 0 || position > this.totalLength) {
+      throw new Error("invalid position=${position}: must be in range [0, totalLength=${this.totalLength}]");
+    }
+    // O(n) is fine for now
+    let lengthSoFar = 0;
+    for (const segment of this.segments) {
+      // "<=" is important when we reach the end of the line. I am worried
+      // about float arithmetic though 😅
+      if (position <= lengthSoFar + segment.length) {
+        return {
+          segment,
+          // 0-1
+          offset: (position - lengthSoFar) / segment.length,
+        };
+      }
+      lengthSoFar += segment.length;
+    }
+    throw new Error("got to the end of the line without finding the segment??");
+  }
+}
+
+const trainLine = new TrainLine([
+  new Station("Euclid Av"),
+  new Straightaway(5000),
+  new Station("Shepherd Av"),
+  new Straightaway(5000),
+  new Station("Van Siclen Av"),
+  new Straightaway(5000),
+  new Station("Liberty Av"),
+  new Straightaway(5000),
+  new Station("Broadway Junction"),
+  new Straightaway(5000),
+  new Station("Rockaway Av"),
+]);
+
 const totalLength = PARAMS.tapeTotalLength;
 let currentLength = 0;
 let tapeSpeed = 0;
@@ -33,41 +112,12 @@ class Train {
   update(dt) {
     // nice
     const rawPos = this.position + this.velocity * dt;
-    this.position = clamp(0, PARAMS.tapeTotalLength, rawPos);
+    this.position = clamp(0, trainLine.totalLength, rawPos);
   }
 }
 
-const STATIONS = [
-  {name: 'Euclid Av', pos: 0},
-  {name: 'Shepherd Av', pos: 5000},
-  {name: 'Van Siclen Av', pos: 10000},
-  {name: 'Liberty Av', pos: 15000},
-  {name: 'Broadway Junction', pos: 20000},
-  {name: 'Rockaway Av', pos: 25000}
-];
-let currentStation = 0;
+/// GRAPHICS
 
-const within = (station) => {
-  return station?.pos <= currentLength && currentLength < station?.pos + PARAMS.stationLength;
-};
-const updateStation = () => {
-  // assumes that our dx is small enough that we won't skip stations, i guess?
-  const nextStation = STATIONS[currentStation+1];
-  const prevStation = STATIONS[currentStation-1];
-  if (nextStation?.pos <= currentLength) {
-    currentStation++;
-  } else if (currentLength < prevStation?.pos + PARAMS.stationLength) {
-    currentStation--;
-  }
-};
-const stationDetails = () => {
-  const station = STATIONS[currentStation];
-  if (within(station)) {
-    return {name: station.name, offset: (currentLength - station.pos) / PARAMS.stationLength};
-  } else {
-    return null;
-  }
-};
 /// [0, 1] -> [0, 1], mapping the offset within the station to how intense
 /// the alpha of the station text should be.
 const stationOffsetEase = (offset) => {
@@ -120,7 +170,7 @@ const runningTape = (length) => {
   const guideOneTarget = [PARAMS.guideOnePos[0], PARAMS.guideOnePos[1] + PARAMS.guideRadius];
   const tangentOne = tangentPoint(PARAMS.reelOnePos, tapeRadius(length), guideOneTarget, 1);
   const guideTwoTarget = [PARAMS.guideTwoPos[0], PARAMS.guideTwoPos[1] + PARAMS.guideRadius];
-  const tangentTwo = tangentPoint(PARAMS.reelTwoPos, tapeRadius(totalLength - length), guideTwoTarget, -1);
+  const tangentTwo = tangentPoint(PARAMS.reelTwoPos, tapeRadius(trainLine.totalLength - length), guideTwoTarget, -1);
   return new GraphicsPath()
     .moveTo(...tangentOne)
     .lineTo(...guideOneTarget)
@@ -174,6 +224,8 @@ const stationText = new Text({text: ''});
 stationText.y = 330;
 app.stage.addChild(stationText);
 
+/// MIX OF LOGIC AND GRAPHICS
+
 const trains = [
   new Train(0, 100),
   new Train(50000, 200),
@@ -189,19 +241,18 @@ app.stage.addChild(trainText);
 app.ticker.add(time => {
   const dt = time.deltaTime;
   const dx = tapeSpeed * dt;
-  currentLength += dx;
-  updateStation();
-  const stationIn = stationDetails();
-  if (stationIn) {
-    stationText.text = stationIn.name;
-    console.log(stationIn.name);
+  currentLength = clamp(0, trainLine.totalLength, currentLength + dx);
+  const {segment, offset: segmentOffset} = trainLine.segmentWithin(currentLength);
+  if (segment instanceof Station) {
+    stationText.text = segment.name;
+    console.log(segment.name);
     stationText.x = 300; // TODO: don't hardcode this
     stationText.anchor.x = 0.5;
-    stationText.alpha = stationOffsetEase(stationIn.offset);
+    stationText.alpha = stationOffsetEase(segmentOffset);
   } else {
     stationText.text = "";
   }
-  reelOne.rotation -= dx / (2 * Math.PI * tapeRadius(totalLength - currentLength));
+  reelOne.rotation -= dx / (2 * Math.PI * tapeRadius(trainLine.totalLength - currentLength));
   reelTwo.rotation -= dx / (2 * Math.PI * tapeRadius(currentLength));
   tape(tapeGraphics1.clear(), totalLength - currentLength);
   tape(tapeGraphics2.clear(), currentLength);
