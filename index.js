@@ -21,6 +21,22 @@ const totalLength = PARAMS.tapeTotalLength;
 let currentLength = 0;
 let tapeSpeed = 0;
 
+const clamp = (min, max, val) =>
+      val < min ? min : val > max ? max : val;
+
+class Train {
+  constructor(position, velocity) {
+    this.position = position;
+    this.velocity = velocity;
+  }
+
+  update(dt) {
+    // nice
+    const rawPos = this.position + this.velocity * dt;
+    this.position = clamp(0, PARAMS.tapeTotalLength, rawPos);
+  }
+}
+
 const STATIONS = [
   {name: 'Euclid Av', pos: 0},
   {name: 'Shepherd Av', pos: 5000},
@@ -158,6 +174,18 @@ const stationText = new Text({text: ''});
 stationText.y = 330;
 app.stage.addChild(stationText);
 
+const trains = [
+  new Train(0, 100),
+  new Train(50000, 200),
+  new Train(50000, -50),
+];
+console.log(trains[0].position);
+
+const trainText = new Text({text: ''});
+trainText.y = 400;
+trainText.x = 25;
+app.stage.addChild(trainText);
+
 app.ticker.add(time => {
   const dt = time.deltaTime;
   const dx = tapeSpeed * dt;
@@ -183,6 +211,9 @@ app.ticker.add(time => {
     join: 'round',
     cap: 'round'
   });
+
+  trains.forEach(t => t.update(dt));
+  trainText.text = trains.map((t, i) => `Train ${i} is at ${t.position}`).join("\n");
 });
 
 const speedInput = document.querySelector("input");
